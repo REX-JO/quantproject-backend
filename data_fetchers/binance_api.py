@@ -102,7 +102,20 @@ def fetch_live_features():
         df['anomaly_score'] = 0.0
 
     df = df.replace([np.inf, -np.inf], 0)
-    df_clean = df.dropna().tail(24)
+    df_without_missing = df.dropna()
+    if len(df_without_missing) < 24:
+        missing_columns = {
+            column: int(count)
+            for column, count in df.isna().sum().items()
+            if count > 0
+        }
+        raise ValueError(
+            "穩定幣資料清理後不足24小時："
+            f"USDC={len(df_usdc)}、TUSD={len(df_tusd)}、"
+            f"合併後={len(df)}、完整列={len(df_without_missing)}、"
+            f"缺值欄位={missing_columns}"
+        )
+    df_clean = df_without_missing.tail(24)
     
     return df_clean, df
 
