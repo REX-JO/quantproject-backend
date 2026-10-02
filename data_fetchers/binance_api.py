@@ -9,9 +9,19 @@ from models.cryptos.btc_inference_features import build_inference_features
 
 def get_binance_klines(symbol, interval="1h", limit=100):
     """向幣安 REST API 請求 K 線資料"""
-    url = f"https://data-api.binance.vision/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}"
-    response = requests.get(url)
+    url = "https://data-api.binance.vision/api/v3/klines"
+    response = requests.get(
+        url,
+        params={"symbol": symbol, "interval": interval, "limit": limit},
+        timeout=15,
+    )
+    response.raise_for_status()
     data = response.json()
+    if not isinstance(data, list) or not data:
+        raise RuntimeError(
+            f"Binance 未回傳 {symbol} K 線："
+            f"status={response.status_code}、response={response.text[:300]}"
+        )
     
     # 解析幣安回傳的格式
     df = pd.DataFrame(data, columns=[
