@@ -51,6 +51,39 @@ def _fill_missing_hours(frame: pd.DataFrame) -> pd.DataFrame:
     return frame.rename_axis("open_time").reset_index()
 
 
+def build_crypto_features_from_klines(
+    symbol: str,
+    payload: list[list[object]],
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Build crypto model features from Binance K-lines supplied by the frontend."""
+    symbol = symbol.upper()
+    if symbol not in SUPPORTED_SYMBOLS:
+        raise ValueError(f"unsupported crypto symbol: {symbol}")
+    if not isinstance(payload, list) or not payload:
+        raise ValueError(f"Binance K-line data for {symbol} must be a non-empty array")
+    if any(not isinstance(row, list) or len(row) != 12 for row in payload):
+        raise ValueError(f"each Binance K-line row for {symbol} must contain 12 fields")
+
+    frame = pd.DataFrame(payload, columns=BINANCE_KLINE_COLUMNS)
+    for column in RAW_NUMERIC_COLUMNS:
+        frame[column] = pd.to_numeric(frame[column], errors="coerce")
+    frame["close_time"] = pd.to_numeric(frame["close_time"], errors="coerce")
+    frame["open_time"] = pd.to_datetime(frame["open_time"], unit="ms", utc=True)
+
+    display_frame = _fill_missing_hours(frame.copy())
+
+    now_ms = time.time_ns() // 1_000_000
+    closed_frame = frame.loc[frame["close_time"] <= now_ms].copy()
+    if closed_frame.empty:
+        raise RuntimeError(f"Binance returned no closed K-line rows for {symbol}")
+
+    closed_frame = _fill_missing_hours(closed_frame)
+    features = build_inference_features(closed_frame)
+    if len(features) < 24:
+        raise ValueError(f"{symbol} has only {len(features)} complete feature rows; expected at least 24")
+    return features, display_frame.tail(100).copy()
+
+
 def fetch_crypto_features(
     symbol: str,
     *,
@@ -71,22 +104,4 @@ def fetch_crypto_features(
     payload = response.json()
     if not isinstance(payload, list) or not payload:
         raise RuntimeError(f"Binance returned no K-line rows for {symbol}")
-
-    frame = pd.DataFrame(payload, columns=BINANCE_KLINE_COLUMNS)
-    for column in RAW_NUMERIC_COLUMNS:
-        frame[column] = pd.to_numeric(frame[column], errors="coerce")
-    frame["close_time"] = pd.to_numeric(frame["close_time"], errors="coerce")
-    frame["open_time"] = pd.to_datetime(frame["open_time"], unit="ms", utc=True)
-
-    display_frame = _fill_missing_hours(frame.copy())
-
-    now_ms = time.time_ns() // 1_000_000
-    closed_frame = frame.loc[frame["close_time"] <= now_ms].copy()
-    if closed_frame.empty:
-        raise RuntimeError(f"Binance returned no closed K-line rows for {symbol}")
-
-    closed_frame = _fill_missing_hours(closed_frame)
-    features = build_inference_features(closed_frame)
-    if len(features) < 24:
-        raise ValueError(f"{symbol} has only {len(features)} complete feature rows; expected at least 24")
-    return features, display_frame.tail(100).copy()
+    return build_crypto_features_from_klines(symbol, payload)

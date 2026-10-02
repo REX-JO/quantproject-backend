@@ -7,6 +7,29 @@ import joblib
 # 引入我們寫好的 BTC 特徵工程函數
 from models.cryptos.btc_inference_features import build_inference_features
 
+
+BINANCE_KLINE_COLUMNS = [
+    'timestamp', 'Open', 'High', 'Low', 'Close', 'Volume',
+    'close_time', 'qav', 'num_trades', 'taker_base_vol', 'taker_quote_vol', 'ignore'
+]
+
+
+def parse_binance_klines(data):
+    """將 Binance 原始 K 線陣列轉為穩定幣模型使用的資料表。"""
+    if not isinstance(data, list) or not data:
+        raise ValueError("Binance K 線資料必須是非空陣列")
+    if any(not isinstance(row, list) or len(row) != 12 for row in data):
+        raise ValueError("Binance 每根 K 線必須包含 12 個欄位")
+
+    df = pd.DataFrame(data, columns=BINANCE_KLINE_COLUMNS)
+    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+
+    for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
+        df[col] = pd.to_numeric(df[col], errors='raise')
+
+    return df[['timestamp', 'Open', 'High', 'Low', 'Close', 'Volume']]
+
+
 def get_binance_klines(symbol, interval="1h", limit=100):
     """向幣安 REST API 請求 K 線資料"""
     url = "https://data-api.binance.vision/api/v3/klines"
@@ -23,18 +46,7 @@ def get_binance_klines(symbol, interval="1h", limit=100):
             f"status={response.status_code}、response={response.text[:300]}"
         )
     
-    # 解析幣安回傳的格式
-    df = pd.DataFrame(data, columns=[
-        'timestamp', 'Open', 'High', 'Low', 'Close', 'Volume', 
-        'close_time', 'qav', 'num_trades', 'taker_base_vol', 'taker_quote_vol', 'ignore'
-    ])
-    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-    
-    # 轉換型態為浮點數
-    for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
-        df[col] = df[col].astype(float)
-        
-    return df[['timestamp', 'Open', 'High', 'Low', 'Close', 'Volume']]
+    return parse_binance_klines(data)
 
 def fetch_live_features():
     """抓取 USDC 和 TUSD 資料，並即時計算出模型需要的特徵"""
@@ -43,6 +55,12 @@ def fetch_live_features():
     # 1. 獲取原始 K 線
     df_usdc = get_binance_klines("USDCUSDT", interval="1h", limit=100)
     df_tusd = get_binance_klines("TUSDUSDT", interval="1h", limit=100)
+
+    return build_stablecoin_features(df_usdc, df_tusd)
+
+
+def build_stablecoin_features(df_usdc, df_tusd):
+    """使用已解析的 USDC、TUSD K 線建立穩定幣模型特徵。"""
 
     # 重新命名以符合模型特徵名稱
     df_usdc = df_usdc.rename(columns={'Open': 'USDCUSDT_Open', 'High': 'USDCUSDT_High', 'Low': 'USDCUSDT_Low', 'Close': 'USDCUSDT_Price', 'Volume': 'USDCUSDT_Volume'})
@@ -128,6 +146,14 @@ def fetch_live_features():
     df_clean = df_without_missing.tail(24)
     
     return df_clean, df
+
+
+def build_stablecoin_features_from_klines(usdc_klines, tusd_klines):
+    """使用前端傳入的 Binance 原始 K 線建立穩定幣模型特徵。"""
+    return build_stablecoin_features(
+        parse_binance_klines(usdc_klines),
+        parse_binance_klines(tusd_klines),
+    )
 
 def fetch_btc_features():
     """從幣安抓取 BTC 歷史 K 線，並套用即時推論專用的特徵工程。"""

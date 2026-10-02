@@ -1,18 +1,41 @@
 from contextlib import asynccontextmanager
+import os
 from pathlib import Path
+
+for thread_env in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+    os.environ[thread_env] = "1"
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
+from pydantic import BaseModel
 
 # 匯入資料擷取與推論模組
 from models.stablecoins.predictor import get_stablecoin_model_info, run_ensemble_risk_analysis
-from data_fetchers.binance_api import fetch_live_features
-from data_fetchers.crypto_api import fetch_crypto_features
+from data_fetchers.binance_api import (
+    build_stablecoin_features_from_klines,
+    fetch_live_features,
+)
+from data_fetchers.crypto_api import (
+    build_crypto_features_from_klines,
+    fetch_crypto_features,
+)
 from models.cryptos.cryptos_predictor import load_crypto_models, predict_latest_score
 
 base_dir = Path(__file__).parent
 checkpoint_dir = base_dir / "models" / "cryptos" / "weights"
+required_kline_symbols = {
+    "USDCUSDT",
+    "TUSDUSDT",
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT",
+    "XRPUSDT",
+}
+
+
+class BrowserKlineRequest(BaseModel):
+    klines: dict[str, list[list[object]]]
 
 
 @asynccontextmanager
@@ -42,14 +65,30 @@ app.add_middleware(
 async def health_check():
     return {"status": "ok"}
 
-# ------------------------------------------------------------
-# 單一總覽 API 網址（前端只要請求這個即可）
-# ------------------------------------------------------------
-@app.get("/api/v1/dashboard/overview")
-async def get_dashboard_overview(request: Request):
+async def build_dashboard_overview(
+    request: Request,
+    klines: dict[str, list[list[object]]] | None = None,
+):
     try:
+        if klines is not None:
+            received_symbols = set(klines)
+            missing_symbols = sorted(required_kline_symbols - received_symbols)
+            unexpected_symbols = sorted(received_symbols - required_kline_symbols)
+            if missing_symbols or unexpected_symbols:
+                raise ValueError(
+                    f"K 線幣種不正確：缺少={missing_symbols}、多餘={unexpected_symbols}"
+                )
+
         # ==================== A. 穩定幣脫鉤風險分析 ====================
-        df_stable_latest_24h, df_stable_kline_100h = fetch_live_features()
+        if klines is None:
+            df_stable_latest_24h, df_stable_kline_100h = fetch_live_features()
+        else:
+            df_stable_latest_24h, df_stable_kline_100h = (
+                build_stablecoin_features_from_klines(
+                    klines["USDCUSDT"],
+                    klines["TUSDUSDT"],
+                )
+            )
         stablecoin_results = run_ensemble_risk_analysis(df_stable_latest_24h)
         
         # 確保 K 線依時間由舊到新排序，使最新時間點靠右
@@ -97,7 +136,13 @@ async def get_dashboard_overview(request: Request):
         # ==================== B. 四幣種 4 小時方向分數 ====================
         crypto_data = []
         for symbol, bundle in request.app.state.crypto_models.items():
-            feature_rows, kline_rows = fetch_crypto_features(symbol)
+            if klines is None:
+                feature_rows, kline_rows = fetch_crypto_features(symbol)
+            else:
+                feature_rows, kline_rows = build_crypto_features_from_klines(
+                    symbol,
+                    klines[f"{symbol}USDT"],
+                )
             result = predict_latest_score(bundle, feature_rows)
             raw_up_score = float(result["up_score"])
             up_score = round(raw_up_score * 100, 2)
@@ -163,3 +208,19 @@ async def get_dashboard_overview(request: Request):
             "success": False,
             "error_message": str(e)
         }
+
+
+# ------------------------------------------------------------
+# 總覽 API：保留後端抓取版，並新增 Flutter Web 傳入 K 線版
+# ------------------------------------------------------------
+@app.get("/api/v1/dashboard/overview")
+async def get_dashboard_overview(request: Request):
+    return await build_dashboard_overview(request)
+
+
+@app.post("/api/v1/dashboard/overview/from-klines")
+async def post_dashboard_overview_from_klines(
+    payload: BrowserKlineRequest,
+    request: Request,
+):
+    return await build_dashboard_overview(request, payload.klines)
