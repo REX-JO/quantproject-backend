@@ -63,7 +63,7 @@ def fetch_crypto_features(
         raise ValueError(f"unsupported crypto symbol: {symbol}")
 
     response = requests.get(
-        "https://api.binance.com/api/v3/klines",
+        "https://data-api.binance.vision/api/v3/klines",
         params={"symbol": f"{symbol}USDT", "interval": "1h", "limit": limit},
         timeout=timeout_seconds,
     )

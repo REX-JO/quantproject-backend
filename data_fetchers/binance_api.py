@@ -9,7 +9,7 @@ from models.cryptos.btc_inference_features import build_inference_features
 
 def get_binance_klines(symbol, interval="1h", limit=100):
     """向幣安 REST API 請求 K 線資料"""
-    url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}"
+    url = f"https://data-api.binance.vision/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}"
     response = requests.get(url)
     data = response.json()
     
@@ -122,7 +122,7 @@ def fetch_live_features():
 def fetch_btc_features():
     """從幣安抓取 BTC 歷史 K 線，並套用即時推論專用的特徵工程。"""
     print("📡 正在從幣安獲取 BTC 最新行情與深度特徵...")
-    url = "https://api.binance.com/api/v3/klines"
+    url = "https://data-api.binance.vision/api/v3/klines"
     
     params = {
         "symbol": "BTCUSDT",
