@@ -88,60 +88,83 @@ models_cache = {}
 
 def get_stablecoin_model_info():
     """Return display metadata that can be verified from the deployed code and weights."""
-    metric_note = "目前權重檔未記錄驗證 ROC-AUC"
+    common = {
+        "prediction_horizon_hours": 6,
+        "prediction_target": "分類監測與未來 6 小時最低價迴歸",
+        "kline_interval": "1h",
+        "input_kline_count": 24,
+        "validation_roc_auc": None,
+    }
 
-    def coin_info(transformer_classifier_features):
-        return {
-            "prediction_horizon_hours": 6,
-            "prediction_target": "未來 6 小時最低價與脫鉤風險",
-            "kline_interval": "1h",
-            "input_kline_count": 24,
-            "validation_roc_auc": None,
-            "validation_metric_note": metric_note,
+    return {
+        "USDC": {
+            **common,
+            "dataset_period": "2023～2025 年 Binance 1h K 線資料",
             "models": [
-                {
-                    "model_key": "ensemble",
-                    "display_name": "XGBoost+Transformer",
-                    "components": ["XGBoost", "Transformer 0.995"],
-                    "feature_counts": {
-                        "xgboost": 32,
-                        "transformer_classifier": transformer_classifier_features,
-                        "transformer_regressor": 8,
-                    },
-                },
                 {
                     "model_key": "transformer_0995",
                     "display_name": "Transformer0.995",
                     "components": ["Transformer 0.995"],
-                    "feature_counts": {
-                        "classifier": transformer_classifier_features,
-                        "regressor": 8,
-                    },
+                    "feature_counts": {"classifier": 9},
                 },
                 {
                     "model_key": "transformer_099",
                     "display_name": "Transformer0.99",
                     "components": ["Transformer 0.99"],
-                    "feature_counts": {
-                        "classifier": transformer_classifier_features,
-                        "regressor": 8,
-                    },
+                    "feature_counts": {"classifier": 9},
                 },
                 {
                     "model_key": "xgboost",
                     "display_name": "XGBoost",
                     "components": ["XGBoost"],
-                    "feature_counts": {
-                        "classifier": 32,
-                        "regressor": 32,
-                    },
+                    "feature_counts": {"classifier": 32},
                 },
             ],
-        }
-
-    return {
-        "USDC": coin_info(transformer_classifier_features=9),
-        "TUSD": coin_info(transformer_classifier_features=11),
+            "regression_models": [
+                {
+                    "display_name": "Transformer",
+                    "feature_count": 8,
+                },
+                {
+                    "display_name": "XGBoost",
+                    "feature_count": 32,
+                },
+            ],
+        },
+        "TUSD": {
+            **common,
+            "dataset_period": "2023～2025 年 Binance 1h K 線資料",
+            "models": [
+                {
+                    "model_key": "transformer_0995",
+                    "display_name": "Transformer0.995",
+                    "components": ["Transformer 0.995"],
+                    "feature_counts": {"classifier": 11},
+                },
+                {
+                    "model_key": "transformer_099",
+                    "display_name": "Transformer0.99",
+                    "components": ["Transformer 0.99"],
+                    "feature_counts": {"classifier": 11},
+                },
+                {
+                    "model_key": "xgboost",
+                    "display_name": "XGBoost",
+                    "components": ["XGBoost"],
+                    "feature_counts": {"classifier": 32},
+                },
+            ],
+            "regression_models": [
+                {
+                    "display_name": "Transformer",
+                    "feature_count": 8,
+                },
+                {
+                    "display_name": "XGBoost",
+                    "feature_count": 32,
+                },
+            ],
+        },
     }
 
 def load_transformer(model_class, path, input_dim):
