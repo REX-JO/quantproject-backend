@@ -226,7 +226,7 @@ def load_all_models():
 # ============================================================
 # Main Prediction Logic
 # ============================================================
-def run_ensemble_risk_analysis(df_24h: pd.DataFrame):
+def run_stablecoin_risk_analysis(df_24h: pd.DataFrame):
     load_all_models()
 
     if len(df_24h) < 24:
@@ -358,16 +358,10 @@ def run_ensemble_risk_analysis(df_24h: pd.DataFrame):
     tusd_xgb_future = float(models_cache["tusd_xgb_reg"].predict(xgb_input)[0])
 
     # 封裝結果
-    usdc_ens_prob = (usdc_prob_995 + usdc_xgb_prob) / 2
-    usdc_ens_price = (usdc_trans_future + usdc_xgb_future) / 2
-    result.update(output_block("usdc_ensemble", current_usdc, usdc_ens_price, usdc_ens_prob))
     result.update(output_block("usdc_transformer_0995", current_usdc, usdc_trans_future, usdc_prob_995))
     result.update(output_block("usdc_transformer_099", current_usdc, usdc_trans_future, usdc_prob_99))
     result.update(output_block("usdc_xgboost", current_usdc, usdc_xgb_future, usdc_xgb_prob))
 
-    tusd_ens_prob = (tusd_prob_995 + tusd_xgb_prob) / 2
-    tusd_ens_price = (tusd_trans_future + tusd_xgb_future) / 2
-    result.update(output_block("tusd_ensemble", current_tusd, tusd_ens_price, tusd_ens_prob))
     result.update(output_block("tusd_transformer_0995", current_tusd, tusd_trans_future, tusd_prob_995))
     result.update(output_block("tusd_transformer_099", current_tusd, tusd_trans_future, tusd_prob_99))
     result.update(output_block("tusd_xgboost", current_tusd, tusd_xgb_future, tusd_xgb_prob))

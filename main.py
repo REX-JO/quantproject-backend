@@ -11,7 +11,7 @@ import pandas as pd
 from pydantic import BaseModel
 
 # 匯入資料擷取與推論模組
-from models.stablecoins.predictor import get_stablecoin_model_info, run_ensemble_risk_analysis
+from models.stablecoins.predictor import get_stablecoin_model_info, run_stablecoin_risk_analysis
 from data_fetchers.binance_api import (
     build_stablecoin_features_from_klines,
     fetch_live_features,
@@ -89,7 +89,7 @@ async def build_dashboard_overview(
                     klines["TUSDUSDT"],
                 )
             )
-        stablecoin_results = run_ensemble_risk_analysis(df_stable_latest_24h)
+        stablecoin_results = run_stablecoin_risk_analysis(df_stable_latest_24h)
         
         # 確保 K 線依時間由舊到新排序，使最新時間點靠右
         if 'timestamp' in df_stable_kline_100h.columns:
@@ -119,14 +119,8 @@ async def build_dashboard_overview(
                 "close": float(row['TUSDUSDT_Price']),
                 "vol": float(row['TUSDUSDT_Volume'])
             })
-        
-        sys_max_prob = max(
-            stablecoin_results.get('usdc_ensemble_depeg_probability', 0), 
-            stablecoin_results.get('tusd_ensemble_depeg_probability', 0)
-        )
 
         stablecoin_data = {
-            "system_max_risk_probability": sys_max_prob,
             **stablecoin_results,
             "usdc_kline_data": usdc_kline_list,
             "tusd_kline_data": tusd_kline_list,
