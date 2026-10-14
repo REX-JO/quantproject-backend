@@ -253,6 +253,11 @@ def run_stablecoin_risk_analysis(df_24h: pd.DataFrame):
         'USDC_Amplitude', 'USDC_Panic_Drop', 'anomaly_score'
     ]
 
+    features_tusd_reg = [
+        'TUSDUSDT_Price', 'USDCUSDT_Price', 'Spread', 'TUSD_Deviation', 'TUSD_Volatility',
+        'TUSD_Amplitude', 'TUSD_Panic_Drop', 'anomaly_score'
+    ]
+
     features_32_xgb = [
         'USDCUSDT_Open', 'USDCUSDT_High', 'USDCUSDT_Low', 'USDCUSDT_Price', 'USDCUSDT_Volume',
         'TUSDUSDT_Open', 'TUSDUSDT_High', 'TUSDUSDT_Low', 'TUSDUSDT_Price', 'TUSDUSDT_Volume',
@@ -269,6 +274,7 @@ def run_stablecoin_risk_analysis(df_24h: pd.DataFrame):
     raw_usdc_cls = df_window[features_usdc_cls].values
     raw_tusd_cls = df_window[features_tusd_cls].values
     raw_reg = df_window[features_8_reg].values
+    raw_tusd_reg = df_window[features_tusd_reg].values
     xgb_input = df_window[features_32_xgb].iloc[-1:].values
 
     def get_scaler_obj(scaler_item):
@@ -300,7 +306,7 @@ def run_stablecoin_risk_analysis(df_24h: pd.DataFrame):
 
     tusd_cls_99_input = torch.tensor(s_tusd_99.transform(raw_tusd_cls), dtype=torch.float32).unsqueeze(0).to(DEVICE)
     tusd_cls_995_input = torch.tensor(s_tusd_995.transform(raw_tusd_cls), dtype=torch.float32).unsqueeze(0).to(DEVICE)
-    tusd_reg_input = torch.tensor(s_tusd_reg.transform(raw_reg), dtype=torch.float32).unsqueeze(0).to(DEVICE)
+    tusd_reg_input = torch.tensor(s_tusd_reg.transform(raw_tusd_reg), dtype=torch.float32).unsqueeze(0).to(DEVICE)
 
     current_usdc = float(df_window["USDCUSDT_Price"].iloc[-1])
     current_tusd = float(df_window["TUSDUSDT_Price"].iloc[-1])
